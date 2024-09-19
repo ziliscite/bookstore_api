@@ -2,11 +2,7 @@ package main
 
 import (
 	"bookstore_api/db"
-	"bookstore_api/internal/controllers"
 	"bookstore_api/internal/repositories"
-	"bookstore_api/internal/services"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
 	"log"
 	"net/http"
@@ -15,32 +11,23 @@ import (
 func runServer() error {
 	database, err := db.NewDatabase()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
-	defer func(database *db.Database) {
+	defer func(database *db.Database) error {
 		err = database.Close()
 		if err != nil {
-
+			return err
 		}
+		return nil
 	}(database)
 
-	bookRepo := &repositories.Repository{Db: database.Db}
-	bookService := services.NewBookService(bookRepo)
-	bookHandler := controllers.NewBookHandler(bookService)
+	repository := &repositories.Repository{Db: database.Db}
 
-	r := chi.NewRouter()
+	routers := NewRouter()
+	routers.RegisterBookRoutes(repository)
 
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
-
-	r.Post("/books", bookHandler.CreateBook)
-	r.Get("/books", bookHandler.GetAllBooks)
-	r.Get("/books/{id}", bookHandler.GetBookById)
-	r.Put("/books/{id}", bookHandler.UpdateBook)
-	r.Delete("/books/{id}", bookHandler.DeleteBook)
-
-	err = http.ListenAndServe(":8080", r)
+	err = http.ListenAndServe(":8080", routers.mux)
 	if err != nil {
 		return err
 	}
@@ -56,6 +43,6 @@ func main() {
 
 	err = runServer()
 	if err != nil {
-		log.Fatal("Error starting server")
+		log.Fatalf("Error starting server, %s", err)
 	}
 }
