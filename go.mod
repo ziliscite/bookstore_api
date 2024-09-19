@@ -6,6 +6,7 @@ require github.com/jmoiron/sqlx v1.4.0
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
+	github.com/go-chi/chi/v5 v5.1.0
 	github.com/jackc/pgx/v4 v4.18.3
 	github.com/joho/godotenv v1.5.1
 	github.com/stretchr/testify v1.9.0

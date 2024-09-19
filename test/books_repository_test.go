@@ -1,8 +1,8 @@
 package test
 
 import (
+	"bookstore_api/internal/repositories"
 	"bookstore_api/models"
-	"bookstore_api/repositories"
 	"context"
 	"database/sql"
 	"fmt"
@@ -66,7 +66,7 @@ func TestCreateBook(t *testing.T) {
 					sqlmock.NewResult(int64(bookId), 1),
 				)
 
-				createdBook, err := r.CreateBook(ctx, book)
+				createdBook, err := r.Create(ctx, book)
 				if err != nil {
 					t.Fatalf("an error '%s' was not expected when creating a book", err)
 				}
@@ -90,7 +90,7 @@ func TestCreateBook(t *testing.T) {
 					fmt.Errorf("error while inserting book"),
 				)
 
-				_, err := r.CreateBook(ctx, book)
+				_, err := r.Create(ctx, book)
 				require.Error(t, err)
 
 				if err = mock.ExpectationsWereMet(); err != nil {
@@ -107,7 +107,7 @@ func TestCreateBook(t *testing.T) {
 					fmt.Errorf("error getting last inserted id"),
 				)
 
-				_, err := r.CreateBook(ctx, book)
+				_, err := r.Create(ctx, book)
 				require.Error(t, err)
 
 				if err = mock.ExpectationsWereMet(); err != nil {
@@ -152,7 +152,7 @@ func TestGetBook(t *testing.T) {
 				}).AddRow(bookId, book.Title, book.Slug, book.CoverImage, book.Synopsis, book.Price, book.Stock)
 
 				mock.ExpectQuery("SELECT * FROM books WHERE id=?").WithArgs(bookId).WillReturnRows(rows)
-				responseBook, err := r.GetBook(ctx, bookId)
+				responseBook, err := r.GetById(ctx, bookId)
 				if err != nil {
 					t.Fatalf("an error '%s' was not expected when creating a book", err)
 				}
@@ -173,7 +173,7 @@ func TestGetBook(t *testing.T) {
 				ctx := context.Background()
 
 				mock.ExpectQuery("SELECT * FROM books WHERE id=?").WithArgs(1).WillReturnError(fmt.Errorf("error getting book"))
-				_, err := r.GetBook(ctx, 1)
+				_, err := r.GetById(ctx, 1)
 				require.Error(t, err)
 
 				if err = mock.ExpectationsWereMet(); err != nil {
@@ -239,7 +239,7 @@ func TestGetBooks(t *testing.T) {
 				}
 
 				mock.ExpectQuery("SELECT * FROM books").WillReturnRows(rows)
-				responseBooks, err := r.GetBooks(ctx)
+				responseBooks, err := r.GetAll(ctx)
 				if err != nil {
 					t.Fatalf("an error '%s' was not expected when creating a book", err)
 				}
@@ -262,7 +262,7 @@ func TestGetBooks(t *testing.T) {
 				ctx := context.Background()
 
 				mock.ExpectQuery("SELECT * FROM books").WillReturnError(fmt.Errorf("error getting books"))
-				_, err := r.GetBooks(ctx)
+				_, err := r.GetAll(ctx)
 				require.Error(t, err)
 
 				if err = mock.ExpectationsWereMet(); err != nil {
@@ -315,7 +315,7 @@ func TestUpdateBook(t *testing.T) {
 					sqlmock.NewResult(int64(bookId), 1),
 				)
 
-				createdBook, err := r.CreateBook(ctx, book)
+				createdBook, err := r.Create(ctx, book)
 				if err != nil {
 					t.Fatalf("an error '%s' was not expected when creating a book", err)
 				}
@@ -327,7 +327,7 @@ func TestUpdateBook(t *testing.T) {
 					sqlmock.NewResult(int64(bookId), 1),
 				)
 
-				updatedBook, err := r.UpdateBook(ctx, postUpdateBook)
+				updatedBook, err := r.Update(ctx, postUpdateBook)
 				if err != nil {
 					t.Fatalf("an error '%s' was not expected when updating a book", err)
 				}
@@ -345,7 +345,7 @@ func TestUpdateBook(t *testing.T) {
 					fmt.Errorf("error updating product"),
 				)
 
-				_, err := r.UpdateBook(context.Background(), book)
+				_, err := r.Update(context.Background(), book)
 				require.Error(t, err)
 
 				if err = mock.ExpectationsWereMet(); err != nil {
@@ -380,7 +380,7 @@ func TestDeleteBook(t *testing.T) {
 					sqlmock.NewResult(int64(bookId), 1),
 				)
 
-				err := r.DeleteBook(ctx, bookId)
+				err := r.Delete(ctx, bookId)
 				if err != nil {
 					t.Fatalf("an error '%s' was not expected when creating a book", err)
 				}
@@ -400,7 +400,7 @@ func TestDeleteBook(t *testing.T) {
 					fmt.Errorf("error deleting book"),
 				)
 
-				err := r.DeleteBook(ctx, bookId)
+				err := r.Delete(ctx, bookId)
 				require.Error(t, err)
 
 				if err = mock.ExpectationsWereMet(); err != nil {

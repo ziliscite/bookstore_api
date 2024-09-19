@@ -5,11 +5,11 @@ import (
 )
 
 type Repository struct {
-	db *sqlx.DB
+	Db *sqlx.DB
 }
 
 func NewRepository(db *sqlx.DB) *Repository {
 	return &Repository{
-		db: db,
+		Db: db,
 	}
 }
