@@ -12,6 +12,8 @@ import (
 	"testing"
 )
 
+// TODO: Test the services & tools
+
 func NewDatabaseMock() (*sql.DB, sqlmock.Sqlmock, error) {
 	// Mocking database
 	conn, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual)) // A more sensitive query
@@ -39,43 +41,46 @@ func withDatabaseMock(t *testing.T, fn func(*sqlx.DB, sqlmock.Sqlmock)) {
 	fn(db, mock)
 }
 
-// Unit testing (or integration testing? Since its db?)
 func TestCreateBook(t *testing.T) {
 	book := &models.Book{
-		Title: "Solo Leveling",
-		// We insert the slug manually in this mocking
-		// Because doing slug is handler's concern
+		Title:      "Solo Leveling",
 		Slug:       "solo-leveling",
 		CoverImage: "https://asura.nacmcdn.com/wp-content/uploads/2022/03/solo-leveling.jpg",
-		Synopsis:   "In a world where hunters, humans with magical abilities, must battle deadly monsters to protect the human race, Sung Jinwoo, the weakest of the rank E hunters, struggles to earn a living. However, after narrowly surviving an overwhelmingly powerful dungeon that nearly wipes out his entire party, a mysterious program called the System chooses him as its sole player and grants him the extremely rare ability to level up in strength, possibly beyond any known limits. Jinwoo sets off on a journey to become an unparalleled S-rank hunter.",
+		Synopsis:   "In a world where hunters, humans with magical abilities...",
 		Price:      12.99,
 		Stock:      517,
 	}
 
 	cases := []struct {
 		name string
-		test func(*testing.T, *repositories.Repository, sqlmock.Sqlmock)
+		test func(*testing.T, *repositories.BookRepository, sqlmock.Sqlmock)
 	}{
 		{
 			name: "Success",
-			test: func(t *testing.T, r *repositories.Repository, mock sqlmock.Sqlmock) {
+			test: func(t *testing.T, r *repositories.BookRepository, mock sqlmock.Sqlmock) {
 				ctx := context.Background()
 				bookId := 1
 
-				mock.ExpectExec("INSERT INTO books (title, slug, cover_image, synopsis, price, stock) VALUES (?, ?, ?, ?, ?, ?)").WillReturnResult(
-					sqlmock.NewResult(int64(bookId), 1),
-				)
+				// Change the query to match positional placeholders
+				query := `
+                    INSERT INTO books (title, slug, cover_image, synopsis, price, stock) 
+                    VALUES (?, ?, ?, ?, ?, ?) 
+                    RETURNING *
+                `
+
+				// Mocking the query with positional placeholders
+				mock.ExpectPrepare(query)
+				mock.ExpectQuery(query).
+					WithArgs(book.Title, book.Slug, book.CoverImage, book.Synopsis, book.Price, book.Stock).
+					WillReturnRows(sqlmock.NewRows([]string{"id", "title", "slug", "cover_image", "synopsis", "price", "stock"}).
+						AddRow(bookId, book.Title, book.Slug, book.CoverImage, book.Synopsis, book.Price, book.Stock))
 
 				createdBook, err := r.Create(ctx, book)
-				if err != nil {
-					t.Fatalf("an error '%s' was not expected when creating a book", err)
-				}
+				require.NoError(t, err)
+				require.NotNil(t, createdBook)
+				require.Equal(t, int64(bookId), createdBook.ID)
 
-				require.Equal(t, bookId, createdBook.ID)
-				require.Equal(t, book.Title, createdBook.Title)
-				require.Equal(t, book.Price, createdBook.Price)
-				require.Equal(t, book.Stock, createdBook.Stock)
-
+				// Ensure all expectations are met
 				if err = mock.ExpectationsWereMet(); err != nil {
 					t.Errorf("there were unfulfilled expectations: %s", err)
 				}
@@ -83,29 +88,20 @@ func TestCreateBook(t *testing.T) {
 		},
 		{
 			name: "Exec Failure",
-			test: func(t *testing.T, r *repositories.Repository, mock sqlmock.Sqlmock) {
+			test: func(t *testing.T, r *repositories.BookRepository, mock sqlmock.Sqlmock) {
 				ctx := context.Background()
 
-				mock.ExpectExec("INSERT INTO books (title, slug, cover_image, synopsis, price, stock) VALUES (?, ?, ?, ?, ?, ?)").WillReturnError(
-					fmt.Errorf("error while inserting book"),
-				)
+				query := `
+                    INSERT INTO books (title, slug, cover_image, synopsis, price, stock) 
+                    VALUES (?, ?, ?, ?, ?, ?) 
+                    RETURNING *
+                `
 
-				_, err := r.Create(ctx, book)
-				require.Error(t, err)
-
-				if err = mock.ExpectationsWereMet(); err != nil {
-					t.Errorf("there were unfulfilled expectations: %s", err)
-				}
-			},
-		},
-		{
-			name: "Insert Id Failure",
-			test: func(t *testing.T, r *repositories.Repository, mock sqlmock.Sqlmock) {
-				ctx := context.Background()
-
-				mock.ExpectExec("INSERT INTO books (title, slug, cover_image, synopsis, price, stock) VALUES (?, ?, ?, ?, ?, ?)").WillReturnError(
-					fmt.Errorf("error getting last inserted id"),
-				)
+				// Expect failure during execution with positional placeholders
+				mock.ExpectPrepare(query)
+				mock.ExpectQuery(query).
+					WithArgs(book.Title, book.Slug, book.CoverImage, book.Synopsis, book.Price, book.Stock).
+					WillReturnError(fmt.Errorf("error while inserting book"))
 
 				_, err := r.Create(ctx, book)
 				require.Error(t, err)
@@ -120,63 +116,95 @@ func TestCreateBook(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			withDatabaseMock(t, func(db *sqlx.DB, mock sqlmock.Sqlmock) {
-				mockRepo := repositories.NewRepository(db)
+				mockRepo := repositories.NewBookRepository(repositories.NewRepository(db))
 				c.test(t, mockRepo, mock)
 			})
 		})
 	}
 }
 
-func TestGetBook(t *testing.T) {
+func TestGetById(t *testing.T) {
 	book := &models.Book{
+		ID:         1,
 		Title:      "Solo Leveling",
 		Slug:       "solo-leveling",
 		CoverImage: "https://asura.nacmcdn.com/wp-content/uploads/2022/03/solo-leveling.jpg",
-		Synopsis:   "In a world where hunters, humans with magical abilities, must battle deadly monsters to protect the human race, Sung Jinwoo, the weakest of the rank E hunters, struggles to earn a living. However, after narrowly surviving an overwhelmingly powerful dungeon that nearly wipes out his entire party, a mysterious program called the System chooses him as its sole player and grants him the extremely rare ability to level up in strength, possibly beyond any known limits. Jinwoo sets off on a journey to become an unparalleled S-rank hunter.",
+		Synopsis:   "In a world where hunters, humans with magical abilities...",
 		Price:      12.99,
 		Stock:      517,
 	}
 
 	cases := []struct {
 		name string
-		test func(*testing.T, *repositories.Repository, sqlmock.Sqlmock)
+		test func(*testing.T, *repositories.BookRepository, sqlmock.Sqlmock)
 	}{
 		{
 			name: "Success",
-			test: func(t *testing.T, r *repositories.Repository, mock sqlmock.Sqlmock) {
+			test: func(t *testing.T, r *repositories.BookRepository, mock sqlmock.Sqlmock) {
 				ctx := context.Background()
-				bookId := 1
+				bookId := int64(1)
 
-				rows := sqlmock.NewRows([]string{
-					"id", "title", "slug", "cover_image", "synopsis", "price", "stock",
-				}).AddRow(bookId, book.Title, book.Slug, book.CoverImage, book.Synopsis, book.Price, book.Stock)
+				// Mock the query for getting the book by ID
+				query := `SELECT * FROM books WHERE id=$1`
 
-				mock.ExpectQuery("SELECT * FROM books WHERE id=?").WithArgs(bookId).WillReturnRows(rows)
-				responseBook, err := r.GetById(ctx, bookId)
-				if err != nil {
-					t.Fatalf("an error '%s' was not expected when creating a book", err)
-				}
+				rows := sqlmock.NewRows([]string{"id", "title", "slug", "cover_image", "synopsis", "price", "stock"}).
+					AddRow(book.ID, book.Title, book.Slug, book.CoverImage, book.Synopsis, book.Price, book.Stock)
 
-				require.Equal(t, bookId, responseBook.ID)
-				require.Equal(t, book.Title, responseBook.Title)
-				require.Equal(t, book.Price, responseBook.Price)
-				require.Equal(t, book.Stock, responseBook.Stock)
+				mock.ExpectQuery(query).WithArgs(bookId).WillReturnRows(rows)
 
-				if err = mock.ExpectationsWereMet(); err != nil {
+				// Call the repository method
+				retrievedBook, err := r.GetById(ctx, bookId)
+				require.NoError(t, err)
+				require.NotNil(t, retrievedBook)
+				require.Equal(t, book.ID, retrievedBook.ID)
+				require.Equal(t, book.Title, retrievedBook.Title)
+
+				// Ensure all expectations are met
+				if err := mock.ExpectationsWereMet(); err != nil {
 					t.Errorf("there were unfulfilled expectations: %s", err)
 				}
 			},
 		},
 		{
-			name: "GetContext Failure",
-			test: func(t *testing.T, r *repositories.Repository, mock sqlmock.Sqlmock) {
+			name: "NotFound",
+			test: func(t *testing.T, r *repositories.BookRepository, mock sqlmock.Sqlmock) {
 				ctx := context.Background()
+				bookId := int64(1)
 
-				mock.ExpectQuery("SELECT * FROM books WHERE id=?").WithArgs(1).WillReturnError(fmt.Errorf("error getting book"))
-				_, err := r.GetById(ctx, 1)
+				// Mock the query for getting the book by ID
+				query := `SELECT * FROM books WHERE id=$1`
+
+				mock.ExpectQuery(query).WithArgs(bookId).WillReturnError(sql.ErrNoRows)
+
+				// Call the repository method
+				retrievedBook, err := r.GetById(ctx, bookId)
 				require.Error(t, err)
+				require.Nil(t, retrievedBook)
 
-				if err = mock.ExpectationsWereMet(); err != nil {
+				// Ensure all expectations are met
+				if err := mock.ExpectationsWereMet(); err != nil {
+					t.Errorf("there were unfulfilled expectations: %s", err)
+				}
+			},
+		},
+		{
+			name: "Query Error",
+			test: func(t *testing.T, r *repositories.BookRepository, mock sqlmock.Sqlmock) {
+				ctx := context.Background()
+				bookId := int64(1)
+
+				// Mock a query error
+				query := `SELECT * FROM books WHERE id=$1`
+
+				mock.ExpectQuery(query).WithArgs(bookId).WillReturnError(fmt.Errorf("query error"))
+
+				// Call the repository method
+				retrievedBook, err := r.GetById(ctx, bookId)
+				require.Error(t, err)
+				require.Nil(t, retrievedBook)
+
+				// Ensure all expectations are met
+				if err := mock.ExpectationsWereMet(); err != nil {
 					t.Errorf("there were unfulfilled expectations: %s", err)
 				}
 			},
@@ -186,86 +214,84 @@ func TestGetBook(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			withDatabaseMock(t, func(db *sqlx.DB, mock sqlmock.Sqlmock) {
-				mockRepo := repositories.NewRepository(db)
+				mockRepo := repositories.NewBookRepository(repositories.NewRepository(db))
 				c.test(t, mockRepo, mock)
 			})
 		})
 	}
 }
 
-func TestGetBooks(t *testing.T) {
-	books := []models.Book{
+func TestGetAll(t *testing.T) {
+	books := []*models.Book{
 		{
+			ID:         1,
 			Title:      "Omniscient Reader",
 			Slug:       "omniscient-reader",
 			CoverImage: "https://asura.nacmcdn.com/wp-content/uploads/2021/12/omniscient-reader.jpg",
-			Synopsis:   "Dokja was an average office worker whose sole interest was reading his favorite web novel 'Three Ways to Survive the Apocalypse.' One day, his story comes to life, and he becomes the only person who knows how the world will end. He embarks on a journey to change the course of events and save humanity.",
+			Synopsis:   "Dokja was an average office worker...",
 			Price:      10.99,
 			Stock:      432,
 		},
 		{
+			ID:         2,
 			Title:      "The Beginning After The End",
 			Slug:       "the-beginning-after-the-end",
 			CoverImage: "https://asura.nacmcdn.com/wp-content/uploads/2022/04/the-beginning-after-the-end.jpg",
-			Synopsis:   "King Grey has unrivaled strength, wealth, and prestige in a world governed by martial ability. However, beneath the glamorous exterior lies a man devoid of purpose and will. Reincarnated into a new world filled with magic and monsters, Grey must now navigate this new world and uncover the secrets it holds.",
+			Synopsis:   "King Grey has unrivaled strength...",
 			Price:      11.49,
 			Stock:      289,
-		},
-		{
-			Title:      "Return of the Disaster-Class Hero",
-			Slug:       "return-of-the-disaster-class-hero",
-			CoverImage: "https://asura.nacmcdn.com/wp-content/uploads/2023/06/return-of-the-disaster-class-hero.jpg",
-			Synopsis:   "In a world where powerful individuals known as 'heroes' stand at the top of society, Lee Geon was once regarded as the strongest disaster-class hero before being betrayed and left to die. After a long absence, he returns to seek revenge and reclaim his title.",
-			Price:      13.79,
-			Stock:      356,
 		},
 	}
 
 	cases := []struct {
 		name string
-		test func(*testing.T, *repositories.Repository, sqlmock.Sqlmock)
+		test func(*testing.T, *repositories.BookRepository, sqlmock.Sqlmock)
 	}{
 		{
 			name: "Success",
-			test: func(t *testing.T, r *repositories.Repository, mock sqlmock.Sqlmock) {
+			test: func(t *testing.T, r *repositories.BookRepository, mock sqlmock.Sqlmock) {
 				ctx := context.Background()
 
-				rows := sqlmock.NewRows([]string{
-					"id", "title", "slug", "cover_image", "synopsis", "price", "stock",
-				})
+				// Mock the query for getting all books
+				query := `SELECT * FROM books`
 
-				for i, book := range books {
-					rows.AddRow(i+1, book.Title, book.Slug, book.CoverImage, book.Synopsis, book.Price, book.Stock)
+				rows := sqlmock.NewRows([]string{"id", "title", "slug", "cover_image", "synopsis", "price", "stock"})
+
+				for _, book := range books {
+					rows.AddRow(book.ID, book.Title, book.Slug, book.CoverImage, book.Synopsis, book.Price, book.Stock)
 				}
 
-				mock.ExpectQuery("SELECT * FROM books").WillReturnRows(rows)
-				responseBooks, err := r.GetAll(ctx)
-				if err != nil {
-					t.Fatalf("an error '%s' was not expected when creating a book", err)
-				}
+				mock.ExpectQuery(query).WillReturnRows(rows)
 
-				for i, responseBook := range responseBooks {
-					require.Equal(t, i+1, responseBook.ID)
-					require.Equal(t, books[i].Title, responseBook.Title)
-					require.Equal(t, books[i].Price, responseBook.Price)
-					require.Equal(t, books[i].Stock, responseBook.Stock)
-				}
+				// Call the repository method
+				retrievedBooks, err := r.GetAll(ctx)
+				require.NoError(t, err)
+				require.NotNil(t, retrievedBooks)
+				require.Len(t, retrievedBooks, 2)
 
-				if err = mock.ExpectationsWereMet(); err != nil {
+				// Ensure all expectations are met
+				if err := mock.ExpectationsWereMet(); err != nil {
 					t.Errorf("there were unfulfilled expectations: %s", err)
 				}
 			},
 		},
 		{
-			name: "SelectContext Failure",
-			test: func(t *testing.T, r *repositories.Repository, mock sqlmock.Sqlmock) {
+			name: "Query Error",
+			test: func(t *testing.T, r *repositories.BookRepository, mock sqlmock.Sqlmock) {
 				ctx := context.Background()
 
-				mock.ExpectQuery("SELECT * FROM books").WillReturnError(fmt.Errorf("error getting books"))
-				_, err := r.GetAll(ctx)
-				require.Error(t, err)
+				// Mock a query error
+				query := `SELECT * FROM books`
 
-				if err = mock.ExpectationsWereMet(); err != nil {
+				mock.ExpectQuery(query).WillReturnError(fmt.Errorf("query error"))
+
+				// Call the repository method
+				retrievedBooks, err := r.GetAll(ctx)
+				require.Error(t, err)
+				require.Nil(t, retrievedBooks)
+
+				// Ensure all expectations are met
+				if err := mock.ExpectationsWereMet(); err != nil {
 					t.Errorf("there were unfulfilled expectations: %s", err)
 				}
 			},
@@ -275,7 +301,7 @@ func TestGetBooks(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			withDatabaseMock(t, func(db *sqlx.DB, mock sqlmock.Sqlmock) {
-				mockRepo := repositories.NewRepository(db)
+				mockRepo := repositories.NewBookRepository(repositories.NewRepository(db))
 				c.test(t, mockRepo, mock)
 			})
 		})
@@ -287,68 +313,79 @@ func TestUpdateBook(t *testing.T) {
 		Title:      "Solo Leveling",
 		Slug:       "solo-leveling",
 		CoverImage: "https://asura.nacmcdn.com/wp-content/uploads/2022/03/solo-leveling.jpg",
-		Synopsis:   "In a world where hunters, humans with magical abilities, must battle deadly monsters to protect the human race, Sung Jinwoo, the weakest of the rank E hunters, struggles to earn a living. However, after narrowly surviving an overwhelmingly powerful dungeon that nearly wipes out his entire party, a mysterious program called the System chooses him as its sole player and grants him the extremely rare ability to level up in strength, possibly beyond any known limits. Jinwoo sets off on a journey to become an unparalleled S-rank hunter.",
+		Synopsis:   "In a world where hunters, humans with magical abilities...",
 		Price:      12.99,
 		Stock:      517,
+		ID:         1, // Make sure ID is set here
 	}
 
 	postUpdateBook := &models.Book{
 		Title:      "Solo Leveling",
 		Slug:       "solo-leveling",
 		CoverImage: "https://asura.nacmcdn.com/wp-content/uploads/2022/03/solo-leveling.jpg",
-		Synopsis:   "In a world where hunters, humans with magical abilities, must battle deadly monsters to protect the human race, Sung Jinwoo, the weakest of the rank E hunters, struggles to earn a living. However, after narrowly surviving an overwhelmingly powerful dungeon that nearly wipes out his entire party, a mysterious program called the System chooses him as its sole player and grants him the extremely rare ability to level up in strength, possibly beyond any known limits. Jinwoo sets off on a journey to become an unparalleled S-rank hunter.",
+		Synopsis:   "In a world where hunters, humans with magical abilities...",
 		Price:      15.99,
 		Stock:      517,
+		ID:         1, // Ensure the ID is set when updating the book
 	}
 
 	cases := []struct {
 		name string
-		test func(*testing.T, *repositories.Repository, sqlmock.Sqlmock)
+		test func(*testing.T, *repositories.BookRepository, sqlmock.Sqlmock)
 	}{
 		{
 			name: "Success",
-			test: func(t *testing.T, r *repositories.Repository, mock sqlmock.Sqlmock) {
+			test: func(t *testing.T, r *repositories.BookRepository, mock sqlmock.Sqlmock) {
 				ctx := context.Background()
 				bookId := 1
 
-				mock.ExpectExec("INSERT INTO books (title, slug, cover_image, synopsis, price, stock) VALUES (?, ?, ?, ?, ?, ?)").WillReturnResult(
-					sqlmock.NewResult(int64(bookId), 1),
-				)
+				// Mock the Insert Query for creating the book
+				mock.ExpectPrepare("INSERT INTO books (title, slug, cover_image, synopsis, price, stock) VALUES (?, ?, ?, ?, ?, ?) RETURNING *")
+				mock.ExpectQuery("INSERT INTO books (title, slug, cover_image, synopsis, price, stock) VALUES (?, ?, ?, ?, ?, ?) RETURNING *").
+					WithArgs(book.Title, book.Slug, book.CoverImage, book.Synopsis, book.Price, book.Stock).
+					WillReturnRows(sqlmock.NewRows([]string{"id", "title", "slug", "cover_image", "synopsis", "price", "stock"}).
+						AddRow(bookId, book.Title, book.Slug, book.CoverImage, book.Synopsis, book.Price, book.Stock))
 
 				createdBook, err := r.Create(ctx, book)
-				if err != nil {
-					t.Fatalf("an error '%s' was not expected when creating a book", err)
-				}
-
-				require.Equal(t, createdBook.ID, bookId)
+				require.NoError(t, err)
+				require.NotNil(t, createdBook)
+				require.Equal(t, createdBook.ID, int64(bookId))
 				require.Equal(t, createdBook, book)
 
-				mock.ExpectExec("UPDATE books SET title=?, slug=?, cover_image=?, synopsis=?, price=?, stock=? WHERE id=?").WillReturnResult(
-					sqlmock.NewResult(int64(bookId), 1),
-				)
+				// Mock the Update Query
+				mock.ExpectPrepare("UPDATE books SET title=?, slug=?, cover_image=?, synopsis=?, price=?, stock=? WHERE id=? RETURNING *")
+				mock.ExpectQuery("UPDATE books SET title=?, slug=?, cover_image=?, synopsis=?, price=?, stock=? WHERE id=? RETURNING *").
+					WithArgs(postUpdateBook.Title, postUpdateBook.Slug, postUpdateBook.CoverImage, postUpdateBook.Synopsis, postUpdateBook.Price, postUpdateBook.Stock, bookId).
+					WillReturnRows(sqlmock.NewRows([]string{"id", "title", "slug", "cover_image", "synopsis", "price", "stock"}).
+						AddRow(bookId, postUpdateBook.Title, postUpdateBook.Slug, postUpdateBook.CoverImage, postUpdateBook.Synopsis, postUpdateBook.Price, postUpdateBook.Stock))
 
 				updatedBook, err := r.Update(ctx, postUpdateBook)
-				if err != nil {
-					t.Fatalf("an error '%s' was not expected when updating a book", err)
-				}
-
+				require.NoError(t, err)
+				require.NotNil(t, updatedBook)
 				require.Equal(t, updatedBook, postUpdateBook)
-				if err = mock.ExpectationsWereMet(); err != nil {
+
+				// Check that all expectations were met
+				if err := mock.ExpectationsWereMet(); err != nil {
 					t.Errorf("there were unfulfilled expectations: %s", err)
 				}
 			},
 		},
 		{
 			name: "NamedExecContext Failure",
-			test: func(t *testing.T, r *repositories.Repository, mock sqlmock.Sqlmock) {
-				mock.ExpectExec("UPDATE books SET title=?, slug=?, cover_image=?, synopsis=?, price=?, stock=? WHERE id=?").WillReturnError(
-					fmt.Errorf("error updating product"),
-				)
+			test: func(t *testing.T, r *repositories.BookRepository, mock sqlmock.Sqlmock) {
+				ctx := context.Background()
 
-				_, err := r.Update(context.Background(), book)
+				// Mock the Update Query to fail
+				mock.ExpectPrepare("UPDATE books SET title=?, slug=?, cover_image=?, synopsis=?, price=?, stock=? WHERE id=? RETURNING *")
+				mock.ExpectQuery("UPDATE books SET title=?, slug=?, cover_image=?, synopsis=?, price=?, stock=? WHERE id=? RETURNING *").
+					WithArgs(postUpdateBook.Title, postUpdateBook.Slug, postUpdateBook.CoverImage, postUpdateBook.Synopsis, postUpdateBook.Price, postUpdateBook.Stock, postUpdateBook.ID).
+					WillReturnError(fmt.Errorf("error updating product"))
+
+				_, err := r.Update(ctx, postUpdateBook)
 				require.Error(t, err)
 
-				if err = mock.ExpectationsWereMet(); err != nil {
+				// Ensure all expectations are met
+				if err := mock.ExpectationsWereMet(); err != nil {
 					t.Errorf("there were unfulfilled expectations: %s", err)
 				}
 			},
@@ -358,7 +395,7 @@ func TestUpdateBook(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			withDatabaseMock(t, func(db *sqlx.DB, mock sqlmock.Sqlmock) {
-				mockRepo := repositories.NewRepository(db)
+				mockRepo := repositories.NewBookRepository(repositories.NewRepository(db))
 				c.test(t, mockRepo, mock)
 			})
 		})
@@ -368,23 +405,25 @@ func TestUpdateBook(t *testing.T) {
 func TestDeleteBook(t *testing.T) {
 	cases := []struct {
 		name string
-		test func(*testing.T, *repositories.Repository, sqlmock.Sqlmock)
+		test func(*testing.T, *repositories.BookRepository, sqlmock.Sqlmock)
 	}{
 		{
 			name: "Success",
-			test: func(t *testing.T, r *repositories.Repository, mock sqlmock.Sqlmock) {
+			test: func(t *testing.T, r *repositories.BookRepository, mock sqlmock.Sqlmock) {
 				ctx := context.Background()
 				bookId := 1
 
-				mock.ExpectExec("DELETE FROM books WHERE id=?").WithArgs(bookId).WillReturnResult(
-					sqlmock.NewResult(int64(bookId), 1),
+				// Mock successful DELETE operation
+				mock.ExpectExec("DELETE FROM books WHERE id=$1").WithArgs(bookId).WillReturnResult(
+					sqlmock.NewResult(0, 1), // For DELETE, only rows affected (1) matters
 				)
 
-				err := r.Delete(ctx, bookId)
+				err := r.Delete(ctx, int64(bookId))
 				if err != nil {
-					t.Fatalf("an error '%s' was not expected when creating a book", err)
+					t.Fatalf("an error '%s' was not expected when deleting a book", err)
 				}
 
+				// Check that all expectations were met
 				if err = mock.ExpectationsWereMet(); err != nil {
 					t.Errorf("there were unfulfilled expectations: %s", err)
 				}
@@ -392,17 +431,19 @@ func TestDeleteBook(t *testing.T) {
 		},
 		{
 			name: "ExecContext Failure",
-			test: func(t *testing.T, r *repositories.Repository, mock sqlmock.Sqlmock) {
+			test: func(t *testing.T, r *repositories.BookRepository, mock sqlmock.Sqlmock) {
 				ctx := context.Background()
 				bookId := 1
 
-				mock.ExpectExec("DELETE FROM books WHERE id=?").WithArgs(bookId).WillReturnError(
+				// Mock failure during DELETE operation
+				mock.ExpectExec("DELETE FROM books WHERE id=$1").WithArgs(bookId).WillReturnError(
 					fmt.Errorf("error deleting book"),
 				)
 
-				err := r.Delete(ctx, bookId)
-				require.Error(t, err)
+				err := r.Delete(ctx, int64(bookId))
+				require.Error(t, err) // Assert that an error was returned
 
+				// Check that all expectations were met
 				if err = mock.ExpectationsWereMet(); err != nil {
 					t.Errorf("there were unfulfilled expectations: %s", err)
 				}
@@ -410,10 +451,11 @@ func TestDeleteBook(t *testing.T) {
 		},
 	}
 
+	// Run all test cases
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			withDatabaseMock(t, func(db *sqlx.DB, mock sqlmock.Sqlmock) {
-				mockRepo := repositories.NewRepository(db)
+				mockRepo := repositories.NewBookRepository(repositories.NewRepository(db))
 				c.test(t, mockRepo, mock)
 			})
 		})

@@ -3,12 +3,14 @@ package handlers
 import (
 	"bookstore_api/internal/services"
 	"bookstore_api/models"
+	"bookstore_api/tools"
+	"context"
 	"encoding/json"
+	"errors"
 	"github.com/go-chi/chi/v5"
 	"log"
 	"net/http"
 	"strconv"
-	"time"
 )
 
 type BookHandler struct {
@@ -36,12 +38,7 @@ func (h *BookHandler) CreateBook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(createdBook)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	tools.RespondWithJSON(w, createdBook, http.StatusCreated)
 }
 
 func (h *BookHandler) GetBookById(w http.ResponseWriter, r *http.Request) {
@@ -53,17 +50,7 @@ func (h *BookHandler) GetBookById(w http.ResponseWriter, r *http.Request) {
 	var cachedBook models.Book
 	cachedBookJSON, err := h.Cache.Get(r.Context(), cacheKey).Result()
 	if err == nil {
-		err = json.Unmarshal([]byte(cachedBookJSON), &cachedBook)
-		if err != nil {
-			http.Error(w, "Failed to unmarshall cached book", http.StatusInternalServerError)
-			return
-		}
-
-		err = json.NewEncoder(w).Encode(cachedBook)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		tools.RespondWithCachedJSON(w, cachedBookJSON, &cachedBook, http.StatusOK)
 		return
 	}
 
@@ -79,42 +66,18 @@ func (h *BookHandler) GetBookById(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert the book to JSON before caching
-	bookJSON, err := json.Marshal(book)
-	if err != nil {
-		http.Error(w, "Failed to process book", http.StatusInternalServerError)
-		return
-	}
-
-	err = h.Cache.Set(r.Context(), cacheKey, bookJSON, time.Second*3600).Err()
-	if err != nil {
-		log.Printf("Failed to cache book: %s", err)
-	}
-
-	_, err = w.Write(bookJSON)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	ctx := context.WithValue(r.Context(), "cachedKey", cacheKey)
+	tools.RespondWithJSONAndCache(w, r.WithContext(ctx), h.Cache, book, http.StatusOK)
 }
 
 func (h *BookHandler) GetAllBooks(w http.ResponseWriter, r *http.Request) {
-
-	// I don't think caching all the books is a good idea.
-	// Because I would then have to delete this cache everytime a book is updated or deleted.
-
 	books, err := h.bookService.GetAllBooks(r.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		tools.RespondWithError(w, err, http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(books)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	tools.RespondWithJSON(w, books, http.StatusOK)
 }
 
 func (h *BookHandler) UpdateBook(w http.ResponseWriter, r *http.Request) {
@@ -125,56 +88,42 @@ func (h *BookHandler) UpdateBook(w http.ResponseWriter, r *http.Request) {
 
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		http.Error(w, "Invalid Id", http.StatusBadRequest)
+		tools.RespondWithError(w, errors.New("invalid Id"), http.StatusBadRequest)
 		return
 	}
 
 	var book models.Book
 	if err = json.NewDecoder(r.Body).Decode(&book); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		tools.RespondWithError(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
 
 	book.ID = int64(id)
 	updatedBook, err := h.bookService.UpdateBook(r.Context(), &book)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		tools.RespondWithError(w, errors.New("failed updating book"), http.StatusBadRequest)
 		return
 	}
 
-	bookJSON, err := json.Marshal(updatedBook)
-	if err != nil {
-		http.Error(w, "Failed to process book", http.StatusInternalServerError)
-		return
-	}
-
-	// Checking wether key exist or not seems like a waste of computing power... Let it just be an error
-
-	err = h.Cache.SetEx(r.Context(), cacheKey, bookJSON, time.Second*3600).Err()
-	if err != nil {
-		log.Printf("Failed to cache book: %s", err)
-	}
-
-	_, err = w.Write(bookJSON)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	ctx := context.WithValue(r.Context(), "cachedKey", cacheKey)
+	tools.RespondWithJSONAndCache(w, r.WithContext(ctx), h.Cache, updatedBook, http.StatusOK)
 }
 
 func (h *BookHandler) DeleteBook(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNoContent)
+
 	idStr := chi.URLParam(r, "id")
 	cacheKey := "book" + idStr
 
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		http.Error(w, "Invalid Id", http.StatusBadRequest)
+		tools.RespondWithError(w, errors.New("invalid Id"), http.StatusBadRequest)
 		return
 	}
 
 	err = h.bookService.DeleteBook(r.Context(), id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		tools.RespondWithError(w, errors.New("failed deleting book"), http.StatusBadRequest)
 		return
 	}
 
@@ -182,6 +131,4 @@ func (h *BookHandler) DeleteBook(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("Failed to cache book: %s", err)
 	}
-
-	w.WriteHeader(http.StatusNoContent)
 }
