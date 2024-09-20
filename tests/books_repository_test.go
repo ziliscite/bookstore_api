@@ -1,4 +1,4 @@
-package test
+package tests
 
 import (
 	"bookstore_api/internal/repositories"

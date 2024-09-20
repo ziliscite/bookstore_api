@@ -6,37 +6,48 @@ import (
 	"fmt"
 )
 
-type BookRepository interface {
-	Create(ctx context.Context, book *models.Book) (*models.Book, error)
-	GetById(ctx context.Context, id int) (*models.Book, error)
-	GetAll(ctx context.Context) ([]*models.Book, error)
-	Update(ctx context.Context, book *models.Book) (*models.Book, error)
-	Delete(ctx context.Context, id int) error
+type BookRepository struct {
+	*Repository
 }
 
-func (r *Repository) Create(ctx context.Context, book *models.Book) (*models.Book, error) {
-	// Execute query
-	res, err := r.Db.NamedExecContext(ctx, "INSERT INTO books (title, slug, cover_image, synopsis, price, stock) VALUES (:title, :slug, :cover_image, :synopsis, :price, :stock)", book)
+func NewBookRepository(repository *Repository) *BookRepository {
+	return &BookRepository{
+		repository,
+	}
+}
+
+type IBookRepository interface {
+	Create(ctx context.Context, book *models.Book) (*models.Book, error)
+	GetById(ctx context.Context, id int64) (*models.Book, error)
+	GetAll(ctx context.Context) ([]*models.Book, error)
+	Update(ctx context.Context, book *models.Book) (*models.Book, error)
+	Delete(ctx context.Context, id int64) error
+}
+
+func (r *BookRepository) Create(ctx context.Context, book *models.Book) (*models.Book, error) {
+	query := `
+        INSERT INTO books (title, slug, cover_image, synopsis, price, stock) 
+        VALUES (:title, :slug, :cover_image, :synopsis, :price, :stock) 
+        RETURNING *
+    `
+
+	// Prepare the named query
+	stmt, err := r.Db.PrepareNamedContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("error preparing query: %v", err)
+	}
+
+	// Execute the query and scan the result into `book` directly
+	err = stmt.GetContext(ctx, book, book)
 	if err != nil {
 		return nil, fmt.Errorf("error while inserting book: %v", err)
 	}
 
-	// Getting the last inserted id (we're not manually inserting it up there)
-	id, err := res.LastInsertId()
-	if err != nil {
-		return nil, fmt.Errorf("error getting last inserted id")
-	}
-
-	// Adding the id
-	book.ID = int(id)
-
-	// Returning the book (reference) with id
 	return book, nil
 }
-
-func (r *Repository) GetById(ctx context.Context, id int) (*models.Book, error) {
+func (r *BookRepository) GetById(ctx context.Context, id int64) (*models.Book, error) {
 	var book models.Book
-	err := r.Db.GetContext(ctx, &book, "SELECT * FROM books WHERE id=?", id)
+	err := r.Db.GetContext(ctx, &book, "SELECT * FROM books WHERE id=$1", id)
 	if err != nil {
 		return nil, fmt.Errorf("error getting book: %v", err)
 	}
@@ -44,7 +55,7 @@ func (r *Repository) GetById(ctx context.Context, id int) (*models.Book, error) 
 	return &book, nil
 }
 
-func (r *Repository) GetAll(ctx context.Context) ([]*models.Book, error) {
+func (r *BookRepository) GetAll(ctx context.Context) ([]*models.Book, error) {
 	var books []*models.Book
 	err := r.Db.SelectContext(ctx, &books, "SELECT * FROM books")
 	if err != nil {
@@ -54,17 +65,32 @@ func (r *Repository) GetAll(ctx context.Context) ([]*models.Book, error) {
 	return books, nil
 }
 
-func (r *Repository) Update(ctx context.Context, book *models.Book) (*models.Book, error) {
-	_, err := r.Db.NamedExecContext(ctx, "UPDATE books SET title=:title, slug=:slug, cover_image=:cover_image, synopsis=:synopsis, price=:price, stock=:stock WHERE id=:id", book)
+func (r *BookRepository) Update(ctx context.Context, book *models.Book) (*models.Book, error) {
+	query := `
+		UPDATE books 
+		SET title=:title, slug=:slug, cover_image=:cover_image, synopsis=:synopsis, price=:price, stock=:stock 
+		WHERE id=:id
+		RETURNING *
+	`
+
+	// Use NamedQueryRowContext for queries that return a single row.
+	stmt, err := r.Db.PrepareNamedContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("error preparing query: %v", err)
+	}
+
+	// Execute the query and map the result to updatedBook.
+	updatedBook := &models.Book{}
+	err = stmt.GetContext(ctx, updatedBook, book)
 	if err != nil {
 		return nil, fmt.Errorf("error while updating book: %v", err)
 	}
 
-	return book, err
+	return updatedBook, nil
 }
 
-func (r *Repository) Delete(ctx context.Context, id int) error {
-	_, err := r.Db.ExecContext(ctx, "DELETE FROM books WHERE id=?", id)
+func (r *BookRepository) Delete(ctx context.Context, id int64) error {
+	_, err := r.Db.ExecContext(ctx, "DELETE FROM books WHERE id=$1", id)
 	if err != nil {
 		return fmt.Errorf("error deleting book: %v", err)
 	}

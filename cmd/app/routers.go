@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bookstore_api/internal/controllers"
+	"bookstore_api/internal/handlers"
 	"bookstore_api/internal/repositories"
 	"bookstore_api/internal/services"
 	"github.com/go-chi/chi/v5"
@@ -25,10 +25,11 @@ func NewRouter() *Router {
 	}
 }
 
-func (r *Router) RegisterBookRoutes(repository *repositories.Repository) {
+func (r *Router) RegisterBookRoutes(handler *handlers.Handler, repository *repositories.Repository) {
 	// Setup book service and handler
-	bookService := services.NewBookService(repository)
-	bookHandler := controllers.NewBookHandler(bookService)
+	bookRepository := repositories.NewBookRepository(repository)
+	bookService := services.NewBookService(bookRepository)
+	bookHandler := handlers.NewBookHandler(handler, bookService)
 
 	// Register book routes
 	r.mux.Post("/books", bookHandler.CreateBook)

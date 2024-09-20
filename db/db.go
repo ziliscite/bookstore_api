@@ -7,7 +7,7 @@ import (
 )
 
 type Database struct {
-	Db *sqlx.DB
+	db *sqlx.DB
 }
 
 func NewDatabase() (*Database, error) {
@@ -17,15 +17,15 @@ func NewDatabase() (*Database, error) {
 	}
 
 	return &Database{
-		Db: database,
+		db: database,
 	}, nil
 }
 
 // Close a wrapper
 func (d *Database) Close() error {
-	return d.Db.Close()
+	return d.db.Close()
 }
 
 func (d *Database) GetDB() *sqlx.DB {
-	return d.Db
+	return d.db
 }

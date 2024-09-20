@@ -2,7 +2,9 @@ package main
 
 import (
 	"bookstore_api/db"
+	"bookstore_api/internal/handlers"
 	"bookstore_api/internal/repositories"
+	"context"
 	"github.com/joho/godotenv"
 	"log"
 	"net/http"
@@ -22,10 +24,26 @@ func runServer() error {
 		return nil
 	}(database)
 
-	repository := &repositories.Repository{Db: database.Db}
+	cache := db.NewCache()
+	defer func(cache *db.Cache) error {
+		err = cache.Close()
+		if err != nil {
+			return err
+		}
+		return nil
+	}(cache)
+
+	pong, err := cache.GetCache().Ping(context.Background()).Result()
+	if err != nil {
+		panic(err)
+	}
+	log.Println(pong)
+
+	repository := repositories.NewRepository(database.GetDB())
+	handler := handlers.NewHandler(cache.GetCache())
 
 	routers := NewRouter()
-	routers.RegisterBookRoutes(repository)
+	routers.RegisterBookRoutes(handler, repository)
 
 	err = http.ListenAndServe(":8080", routers.mux)
 	if err != nil {
@@ -46,3 +64,5 @@ func main() {
 		log.Fatalf("Error starting server, %s", err)
 	}
 }
+
+// docker exec -it bookstore-postgresql psql -U postgres
