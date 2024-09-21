@@ -25,10 +25,10 @@ func NewRouter() *Router {
 	}
 }
 
-func (r *Router) RegisterBookRoutes(handler *handlers.Handler, repository *repositories.Repository) {
+func (r *Router) RegisterBookRoutes(handler *handlers.Handler, service *services.Service, repository *repositories.Repository) {
 	// Setup book service and handler
 	bookRepository := repositories.NewBookRepository(repository)
-	bookService := services.NewBookService(bookRepository)
+	bookService := services.NewBookService(service, bookRepository)
 	bookHandler := handlers.NewBookHandler(handler, bookService)
 
 	// Register book routes
@@ -37,4 +37,12 @@ func (r *Router) RegisterBookRoutes(handler *handlers.Handler, repository *repos
 	r.mux.Get("/books/{id}", bookHandler.GetBookById)
 	r.mux.Put("/books/{id}", bookHandler.UpdateBook)
 	r.mux.Delete("/books/{id}", bookHandler.DeleteBook)
+}
+
+func (r *Router) RegisterUserRoutes(handler *handlers.Handler, service *services.Service, repository *repositories.Repository) {
+	userRepository := repositories.NewUserRepository(repository)
+	userService := services.NewUserService(service, userRepository)
+	userHandler := handlers.NewUserHandler(handler, userService)
+
+	r.mux.Post("/register", userHandler.RegisterUser)
 }

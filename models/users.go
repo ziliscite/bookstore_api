@@ -12,3 +12,16 @@ type User struct {
 	CreatedAt time.Time `json:"created_at" db:"created_at"` // CreatedAt is the timestamp when the user was created.
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"` // UpdatedAt is the timestamp when the user information was last updated.
 }
+
+// UserRegister represents the data user require to provide when registering a new account
+type UserRegister struct {
+	Name     string `json:"name" db:"name"`
+	Email    string `json:"email" db:"email"`
+	Password string `json:"password" db:"password"`
+}
+
+// UserLogin represents the data user require to provide when logging in
+type UserLogin struct {
+	Email    string `json:"email" db:"email"`
+	Password string `json:"password" db:"password"`
+}

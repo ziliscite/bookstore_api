@@ -28,7 +28,7 @@ func NewBookHandler(handler *Handler, bookService *services.BookService) *BookHa
 func (h *BookHandler) CreateBook(w http.ResponseWriter, r *http.Request) {
 	var book models.Book
 	if err := json.NewDecoder(r.Body).Decode(&book); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		tools.RespondWithError(w, errors.New("invalid request body"), http.StatusBadRequest)
 		return
 	}
 
@@ -41,9 +41,34 @@ func (h *BookHandler) CreateBook(w http.ResponseWriter, r *http.Request) {
 	tools.RespondWithJSON(w, createdBook, http.StatusCreated)
 }
 
-func (h *BookHandler) GetBookById(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+//func (h *BookHandler) GetBookById(w http.ResponseWriter, r *http.Request) {
+//	idStr := chi.URLParam(r, "id")
+//	cacheKey := "book" + idStr
+//
+//	var cachedBook models.Book
+//	cachedBookJSON, err := h.Cache.Get(r.Context(), cacheKey).Result()
+//	if err == nil {
+//		tools.RespondWithCachedJSON(w, cachedBookJSON, &cachedBook, http.StatusOK)
+//		return
+//	}
+//
+//	id, err := strconv.Atoi(idStr)
+//	if err != nil {
+//		http.Error(w, "Invalid Id", http.StatusBadRequest)
+//		return
+//	}
+//
+//	book, err := h.bookService.GetBookById(r.Context(), id)
+//	if err != nil {
+//		http.Error(w, "Book not found", http.StatusNotFound)
+//		return
+//	}
+//
+//	ctx := context.WithValue(r.Context(), "cachedKey", cacheKey)
+//	tools.RespondWithJSONAndCache(w, r.WithContext(ctx), h.Cache, book, http.StatusOK)
+//}
 
+func (h *BookHandler) GetBookById(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	cacheKey := "book" + idStr
 
@@ -71,7 +96,12 @@ func (h *BookHandler) GetBookById(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BookHandler) GetAllBooks(w http.ResponseWriter, r *http.Request) {
-	books, err := h.bookService.GetAllBooks(r.Context())
+	query := r.URL.Query()
+	page := query.Get("page")
+
+	ctx := context.WithValue(r.Context(), "page", page)
+
+	books, err := h.bookService.GetAllBooks(ctx)
 	if err != nil {
 		tools.RespondWithError(w, err, http.StatusInternalServerError)
 		return
@@ -81,8 +111,6 @@ func (h *BookHandler) GetAllBooks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BookHandler) UpdateBook(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	idStr := chi.URLParam(r, "id")
 	cacheKey := "book" + idStr
 

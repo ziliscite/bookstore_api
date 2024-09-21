@@ -12,7 +12,7 @@ import (
 func RespondWithCachedJSON(w http.ResponseWriter, cache string, v any, code int) {
 	err := json.Unmarshal([]byte(cache), &v)
 	if err != nil {
-		http.Error(w, "Failed to unmarshall cached book", http.StatusInternalServerError)
+		RespondWithError(w, errors.New("failed to unmarshall cached book"), http.StatusInternalServerError)
 		return
 	}
 
@@ -25,7 +25,7 @@ func RespondWithJSON(w http.ResponseWriter, v any, code int) {
 
 	err := json.NewEncoder(w).Encode(v)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		RespondWithError(w, err, http.StatusInternalServerError)
 	}
 }
 

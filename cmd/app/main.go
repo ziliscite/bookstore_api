@@ -4,6 +4,7 @@ import (
 	"bookstore_api/db"
 	"bookstore_api/internal/handlers"
 	"bookstore_api/internal/repositories"
+	"bookstore_api/internal/services"
 	"context"
 	"github.com/joho/godotenv"
 	"log"
@@ -33,17 +34,29 @@ func runServer() error {
 		return nil
 	}(cache)
 
-	pong, err := cache.GetCache().Ping(context.Background()).Result()
+	_, err = cache.GetCache().Ping(context.Background()).Result()
 	if err != nil {
-		panic(err)
+		return err
 	}
-	log.Println(pong)
 
-	repository := repositories.NewRepository(database.GetDB())
 	handler := handlers.NewHandler(cache.GetCache())
+	service, err := services.NewService()
+	if err != nil {
+		return err
+	}
+	repository := repositories.NewRepository(database.GetDB())
 
 	routers := NewRouter()
-	routers.RegisterBookRoutes(handler, repository)
+	routers.mux.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, err = w.Write([]byte("ok"))
+		if err != nil {
+			return
+		}
+	})
+
+	routers.RegisterBookRoutes(handler, service, repository)
 
 	err = http.ListenAndServe(":8080", routers.mux)
 	if err != nil {
