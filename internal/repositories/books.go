@@ -85,7 +85,7 @@ func (repo *BookRepository) GetAll(ctx context.Context, page int) ([]*models.Boo
 func (repo *BookRepository) Update(ctx context.Context, book *models.Book) (*models.Book, error) {
 	query := `
 		WITH title_conflict AS (
-			SELECT id FROM books WHERE title = :title
+			SELECT id FROM books WHERE title = :title AND NOT id = :id
 		)
 		UPDATE books
 		SET title=:title, slug=:slug, cover_image=:cover_image, synopsis=:synopsis, price=:price, stock=:stock, updated_at=:updated_at 

@@ -86,18 +86,43 @@ func (s *BookService) GetAllBooks(ctx context.Context) ([]*models.Book, error) {
 }
 
 func (s *BookService) UpdateBook(ctx context.Context, book *models.Book) (*models.Book, error) {
-	book.Slug = tools.Slugify(book.Title)
+	checkBook, err := s.bookRepo.GetById(ctx, book.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.decryptBook(checkBook)
+	if err != nil {
+		return nil, err
+	}
+
+	if book.Title != "" {
+		checkBook.Title = book.Title
+		checkBook.Slug = tools.Slugify(book.Title)
+	}
+	if book.CoverImage != "" {
+		checkBook.CoverImage = book.CoverImage
+	}
+	if book.Synopsis != "" {
+		checkBook.Synopsis = book.Synopsis
+	}
+	if book.Price != 0 {
+		checkBook.Price = book.Price
+	}
+	if book.Stock != 0 {
+		checkBook.Stock = book.Stock
+	}
 
 	t := time.Now()
-	book.UpdatedAt = &t
+	checkBook.UpdatedAt = &t
 
-	err := s.encryptBook(book)
+	err = s.encryptBook(checkBook)
 	if err != nil {
 		return nil, err
 	}
 
 	// Updates book
-	updatedBook, err := s.bookRepo.Update(ctx, book)
+	updatedBook, err := s.bookRepo.Update(ctx, checkBook)
 	if err != nil {
 		return nil, err
 	}
