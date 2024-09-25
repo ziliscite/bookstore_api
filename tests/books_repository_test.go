@@ -253,7 +253,7 @@ func TestGetAll(t *testing.T) {
 				ctx := context.Background()
 
 				// Mock the query for getting all books
-				query := `SELECT * FROM books`
+				query := `SELECT * FROM books LIMIT $1 OFFSET $2`
 
 				rows := sqlmock.NewRows([]string{"id", "title", "slug", "cover_image", "synopsis", "price", "stock"})
 
@@ -264,7 +264,7 @@ func TestGetAll(t *testing.T) {
 				mock.ExpectQuery(query).WillReturnRows(rows)
 
 				// Call the repository method
-				retrievedBooks, err := r.GetAll(ctx)
+				retrievedBooks, err := r.GetAll(ctx, 1)
 				require.NoError(t, err)
 				require.NotNil(t, retrievedBooks)
 				require.Len(t, retrievedBooks, 2)
@@ -281,12 +281,12 @@ func TestGetAll(t *testing.T) {
 				ctx := context.Background()
 
 				// Mock a query error
-				query := `SELECT * FROM books`
+				query := `SELECT * FROM books LIMIT $1 OFFSET $2`
 
 				mock.ExpectQuery(query).WillReturnError(fmt.Errorf("query error"))
 
 				// Call the repository method
-				retrievedBooks, err := r.GetAll(ctx)
+				retrievedBooks, err := r.GetAll(ctx, 1)
 				require.Error(t, err)
 				require.Nil(t, retrievedBooks)
 

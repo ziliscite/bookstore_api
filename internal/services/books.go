@@ -34,7 +34,12 @@ func (s *BookService) CreateBook(ctx context.Context, book *models.Book) (*model
 	return s.bookRepo.Create(ctx, book)
 }
 
-func (s *BookService) GetBookById(ctx context.Context, id int) (*models.Book, error) {
+func (s *BookService) GetBookById(ctx context.Context, idStr string) (*models.Book, error) {
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		return nil, errors.New("invalid Id")
+	}
+
 	book, err := s.bookRepo.GetById(ctx, int64(id))
 	if err != nil {
 		return nil, err
@@ -106,7 +111,12 @@ func (s *BookService) UpdateBook(ctx context.Context, book *models.Book) (*model
 	return updatedBook, nil
 }
 
-func (s *BookService) DeleteBook(ctx context.Context, id int) error {
+func (s *BookService) DeleteBook(ctx context.Context, idStr string) error {
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		return errors.New("invalid Id")
+	}
+
 	return s.bookRepo.Delete(ctx, int64(id))
 }
 

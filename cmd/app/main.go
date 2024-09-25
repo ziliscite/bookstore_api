@@ -57,6 +57,7 @@ func runServer() error {
 	})
 
 	routers.RegisterBookRoutes(handler, service, repository)
+	routers.RegisterUserRoutes(handler, service, repository)
 
 	err = http.ListenAndServe(":8080", routers.mux)
 	if err != nil {

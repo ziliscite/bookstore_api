@@ -42,7 +42,18 @@ func (r *Router) RegisterBookRoutes(handler *handlers.Handler, service *services
 func (r *Router) RegisterUserRoutes(handler *handlers.Handler, service *services.Service, repository *repositories.Repository) {
 	userRepository := repositories.NewUserRepository(repository)
 	userService := services.NewUserService(service, userRepository)
-	userHandler := handlers.NewUserHandler(handler, userService)
+
+	sessionRepository := repositories.NewSessionRepository(repository)
+	sessionService := services.NewSessionService(service, sessionRepository)
+
+	userHandler := handlers.NewUserHandler(handler, userService, sessionService)
 
 	r.mux.Post("/register", userHandler.RegisterUser)
+	r.mux.Post("/login", userHandler.LoginUser)
+	r.mux.Post("/logout", userHandler.LogoutUser)
+
+	r.mux.Put("/update", userHandler.UpdateUser)
+
+	r.mux.Post("/refresh", userHandler.RefreshAccessToken)
+	r.mux.Put("/revoke", userHandler.RevokeAccessToken)
 }
