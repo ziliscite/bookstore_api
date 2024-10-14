@@ -1,4 +1,4 @@
-package db
+package postgres
 
 import (
 	_ "github.com/jackc/pgx/v4/stdlib"
@@ -10,7 +10,7 @@ type Database struct {
 	db *sqlx.DB
 }
 
-func NewDatabase() (*Database, error) {
+func New() (*Database, error) {
 	database, err := sqlx.Open("pgx", os.Getenv("POSTGRESQL_OPEN_CONNECTION_STRING"))
 	if err != nil {
 		return nil, err

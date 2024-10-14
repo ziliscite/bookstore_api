@@ -1,4 +1,4 @@
-package handlers
+package handler
 
 import (
 	"github.com/redis/go-redis/v9"

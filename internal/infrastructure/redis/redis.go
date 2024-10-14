@@ -1,4 +1,4 @@
-package db
+package redis
 
 import (
 	"github.com/redis/go-redis/v9"
@@ -10,7 +10,7 @@ type Cache struct {
 	cache *redis.Client
 }
 
-func NewCache() *Cache {
+func New() *Cache {
 	return &Cache{cache: redis.NewClient(&redis.Options{
 		Addr:         os.Getenv("REDIS_ADDR"),
 		DialTimeout:  1 * time.Second,

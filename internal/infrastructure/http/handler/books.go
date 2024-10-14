@@ -1,4 +1,4 @@
-package handlers
+package handler
 
 import (
 	"bookstore_api/internal/services"

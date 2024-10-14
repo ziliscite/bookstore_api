@@ -1,8 +1,10 @@
 package main
 
 import (
-	"bookstore_api/db"
-	"bookstore_api/internal/handlers"
+	"bookstore_api/internal/infrastructure/http/handler"
+	"bookstore_api/internal/infrastructure/http/route"
+	"bookstore_api/internal/infrastructure/postgres"
+	"bookstore_api/internal/infrastructure/redis"
 	"bookstore_api/internal/repositories"
 	"bookstore_api/internal/services"
 	"context"
@@ -12,12 +14,12 @@ import (
 )
 
 func runServer() error {
-	database, err := db.NewDatabase()
+	database, err := postgres.New()
 	if err != nil {
 		return err
 	}
 
-	defer func(database *db.Database) error {
+	defer func(database *postgres.Database) error {
 		err = database.Close()
 		if err != nil {
 			return err
@@ -25,8 +27,8 @@ func runServer() error {
 		return nil
 	}(database)
 
-	cache := db.NewCache()
-	defer func(cache *db.Cache) error {
+	cache := redis.New()
+	defer func(cache *redis.Cache) error {
 		err = cache.Close()
 		if err != nil {
 			return err
@@ -39,15 +41,15 @@ func runServer() error {
 		return err
 	}
 
-	handler := handlers.NewHandler(cache.GetCache())
+	handler := handler.NewHandler(cache.GetCache())
 	service, err := services.NewService()
 	if err != nil {
 		return err
 	}
 	repository := repositories.NewRepository(database.GetDB())
 
-	routers := NewRouter()
-	routers.mux.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+	routers := route.NewRouter()
+	routers.Mux.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, err = w.Write([]byte("ok"))
@@ -56,10 +58,14 @@ func runServer() error {
 		}
 	})
 
-	routers.RegisterBookRoutes(handler, service, repository)
+	// Diff
+	bookRepo := postgres.NewBookRepository(database)
+	routers.RegisterBookRoutes(bookRepo)
+	//
+
 	routers.RegisterUserRoutes(handler, service, repository)
 
-	err = http.ListenAndServe(":8080", routers.mux)
+	err = http.ListenAndServe(":8081", routers.Mux)
 	if err != nil {
 		return err
 	}
