@@ -11,37 +11,6 @@ CREATE TABLE Users (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE Addresses (
-    id SERIAL PRIMARY KEY,
-    address VARCHAR(255),
-    city VARCHAR(255),
-    postal_code VARCHAR(100),
-    country VARCHAR(100)
-);
-
-CREATE TABLE PaymentResults (
-    id SERIAL PRIMARY KEY,
-    status VARCHAR(100),
-    email_address VARCHAR(255),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE Orders (
-    id SERIAL PRIMARY KEY,
-    user_id INT REFERENCES Users(id) ON DELETE CASCADE,
-    address_id INT REFERENCES Addresses(id) ON DELETE CASCADE,
-
-    product_price DECIMAL(10, 2),
-    tax_fee DECIMAL(10, 2),
-    total_price DECIMAL(10, 2),
-
-    payment_method VARCHAR(100),
-    payment_result_id INT REFERENCES PaymentResults(id) ON DELETE CASCADE,
-
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-
 CREATE TABLE Books (
     id SERIAL PRIMARY KEY,
     title VARCHAR(255) NOT NULL UNIQUE,
@@ -58,16 +27,6 @@ CREATE TABLE Books (
 
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE OrderBooks (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100),
-    quantity INT,
-    price INT,
-
-    order_id INT REFERENCES Orders(id) ON DELETE CASCADE,
-    book_id INT REFERENCES Books(id) ON DELETE CASCADE
 );
 
 CREATE TABLE Categories (
